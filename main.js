@@ -4,6 +4,7 @@ import { ObjectChamber } from './ObjectChamber.js?v=104';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // --- Initialization ---
@@ -33,7 +34,9 @@ const uniforms = {
     uAngle: { value: 0.0 },
     uZoom: { value: 1.0 },
     uTime: { value: 0.0 },
-    uKaleidoSpin: { value: 0.0 } // Independent kaleidoscope rotation
+    uKaleidoSpin: { value: 0.0 },
+    uEnergy: { value: 0.0 },
+    uColorWash: { value: new THREE.Vector3(0.0, 0.0, 0.0) }
 };
 
 const material = new THREE.ShaderMaterial({
@@ -51,13 +54,43 @@ const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.6, 0.85);
-bloomPass.threshold = 0.3; // Raised to reduce excessive bloom (was 0.1)
-bloomPass.strength = 0.45; // Reduced intensity (was 1.5, then 0.6)
-bloomPass.radius = 0.6; // Moderate spread (was 0.8)
+bloomPass.threshold = 0.3;
+bloomPass.strength = 0.45;
+bloomPass.radius = 0.6;
 composer.addPass(bloomPass);
 
 // Expose bloom for audio reactivity
 window.bloomPass = bloomPass;
+
+// --- Feedback/Trail Effect ---
+const FeedbackShader = {
+    uniforms: {
+        tDiffuse: { value: null },
+        tPreviousFrame: { value: null },
+        uFeedback: { value: 0.92 }
+    },
+    vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform sampler2D tPreviousFrame;
+        uniform float uFeedback;
+        varying vec2 vUv;
+        void main() {
+            vec4 current = texture2D(tDiffuse, vUv);
+            vec4 previous = texture2D(tPreviousFrame, vUv);
+            gl_FragColor = mix(current, previous, uFeedback);
+        }
+    `
+};
+
+const feedbackPass = new ShaderPass(FeedbackShader);
+composer.addPass(feedbackPass);
+
+// Render target to store previous frame for feedback
+const prevFrameTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter
+});
 
 const outputPass = new OutputPass();
 composer.addPass(outputPass);
@@ -101,8 +134,6 @@ window.onAudioModeChange = (newMode) => {
         flashStatusPanel();
 
         // Randomize Speed Slider (if not manually locked - assuming fully random for now)
-        // Speed slider range is typically 0 to 100 or similar (HTML default is 0-100 if not specified, usually mapped to 0-10)
-        // Assuming 10 to 50 as a reasonable random range
         if (speedSlider) {
             // Random speed between 0.5 (5) and 4.0 (40)
             const randomSpeed = 5 + Math.floor(Math.random() * 35);
@@ -322,6 +353,9 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
     uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+
+    // Resize feedback render target
+    prevFrameTarget.setSize(window.innerWidth, window.innerHeight);
 });
 
 // Mouse / Touch for Rotation
@@ -525,10 +559,41 @@ function animate() {
     if (audio.isPlaying) {
         audio.updateParams(speedMult, chamber.currentTheme);
 
-        // Audio-reactive bloom (reduced range)
+        // Audio energy (used for multiple effects)
         const energy = audio.getEnergy();
-        bloomPass.strength = 0.45 + energy * 0.45; // 0.45 to 0.9 (was 0.6 to 1.2)
-        bloomPass.radius = 0.6 + energy * 0.3;   // 0.6 to 0.9 (was 0.8 to 1.2)
+
+        // Audio-reactive bloom
+        bloomPass.strength = 0.45 + energy * 0.45;
+        bloomPass.radius = 0.6 + energy * 0.3;
+
+        // Audio-reactive shader uniforms
+        uniforms.uEnergy.value += (energy - uniforms.uEnergy.value) * 0.15;
+
+        // Color wash based on audio mode
+        const washMap = {
+            'ambient':       [0.05, 0.1, 0.2],
+            'choral':        [0.1, 0.02, 0.15],
+            'house':         [0.15, 0.08, 0.0],
+            'algorave':      [0.0, 0.15, 0.05],
+            'exotic_groove': [0.12, 0.0, 0.1],
+            'tumbling':      [0.05, 0.05, 0.05],
+            'dnb':           [0.15, 0.0, 0.0],
+            'lofi':          [0.1, 0.08, 0.03]
+        };
+        const wash = washMap[audio.beatMode] || [0, 0, 0];
+        const targetWash = new THREE.Vector3(wash[0], wash[1], wash[2]);
+        uniforms.uColorWash.value.lerp(targetWash, 0.01);
+
+        // Audio-reactive feedback amount (trails)
+        let targetFB;
+        if (['ambient', 'choral', 'lofi'].includes(audio.beatMode)) {
+            targetFB = 0.95; // Heavy trails for chill modes
+        } else if (['algorave', 'dnb'].includes(audio.beatMode)) {
+            targetFB = 0.85; // Light trails for fast modes (clarity)
+        } else {
+            targetFB = 0.92; // Default
+        }
+        feedbackPass.uniforms.uFeedback.value += (targetFB - feedbackPass.uniforms.uFeedback.value) * 0.02;
     }
 
     // Update status display every second
@@ -699,8 +764,14 @@ function animate() {
         // Debug view: render chamber directly to screen
         renderer.render(chamber.scene, chamber.debugCamera);
     } else {
-        // Kaleidoscope view with Bloom
+        // Kaleidoscope view with Bloom + Feedback
         composer.render();
+
+        // Copy current frame to previous frame buffer for next frame's feedback
+        renderer.setRenderTarget(prevFrameTarget);
+        renderer.render(scene, camera);
+        renderer.setRenderTarget(null);
+        feedbackPass.uniforms.tPreviousFrame.value = prevFrameTarget.texture;
     }
 }
 

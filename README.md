@@ -14,7 +14,25 @@ The objects you see aren't just visuals—they have mass, velocity, collisions, 
 
 ## Recent Major Improvements
 
-### Visual Enhancements
+### Audio Engine v2 — Pattern-Based Drum Sequencer & New Modes
+- **8 beat modes** (up from 6): Added **DnB** (170-180 BPM) and **Lo-fi** (70-85 BPM)
+- **Pattern-based drum sequencer**: 16-step patterns with 3 variations per mode for kick, snare, and hihat — replaces random probability triggers with real rhythm
+- **Arpeggiator system**: 5 arp patterns (up, down, updown, skip, random) assigned per mode
+- **New instruments**: Sub-bass 808, pluck synth for melodic arpeggios
+- **Sidechain ducking**: Pumping compression effect in house, algorave, and DnB
+- **Drum fill transitions**: Crescendo snare roll before every mode switch
+- **Vinyl crackle**: Brown noise through bandpass filter, intensity varies per mode (heaviest in lo-fi)
+- **Smooth BPM transitions**: Tempo ramps instead of hard jumps between modes
+- **Mode parameters consolidated** into `_applyModeParams()` for DRY code
+
+### Shader — Prismatic Optics & Audio-Reactive Distortion
+- **Audio-reactive ripple distortion**: Radial waves pulse through the kaleidoscope pattern with audio energy
+- **Prismatic light dispersion**: 5-sample spectral spread with rainbow color bleeding at edges (replaces simple chromatic aberration)
+- **Color wash overlay**: Subtle mode-specific tint (warm amber for house, cool blue for ambient, red for DnB, etc.)
+- **Film grain**: Analog texture overlay, intensity scales with audio energy
+- **Feedback/trail effect**: Frame-blending post-processing creates ghostly afterimages — heavy trails for ambient/choral/lo-fi, light trails for algorave/DnB
+
+### Previous Visual Enhancements
 - **Non-linear radial compression** in shader eliminates empty background issues
 - **Glass front simulation**: barrel distortion, chromatic aberration, vignetting, fresnel edge glow
 - **Balanced bloom system**: no more center hot spots, subtle sparkle without overwhelming
@@ -33,18 +51,6 @@ Six camera modes that fundamentally change the viewing experience:
 6. **Static** - Traditional fixed viewpoint for purists
 
 Camera mode randomizes on scope rebuilds and idle resets, ensuring constant visual evolution.
-
-### Audio System Overhaul
-- **Fixed bass loop**: Pattern-based sequencing (60-75% density) replaced unreliable random probability
-- **Tight audio-visual coupling**: Every visible collision triggers a velocity-based glass chime (removed the 80% gate that was silencing most sounds)
-- **Mode differentiation**: Each audio mode now has distinct BPM ranges, reverb decay, and delay timing
-  - House: 122-128 BPM, 4s reverb, 8th note delay
-  - Exotic Groove: 95-105 BPM, 6s reverb, 4th note delay
-  - Algorave: 135-145 BPM, 2s reverb, 16th note delay
-  - Choral: 60-80 BPM, 12s reverb, half note delay
-  - Tumbling: 80-100 BPM, 8s reverb, quarter note delay
-- **Pitch warp idle effect**: PitchShift detunes everything during contemplative idle periods
-- **Eastern scales added**: Hirajoshi, Pelog, In Sen for exotic flavor
 
 ### UI/UX Polish
 - **Status panel**: Real-time display of theme, camera mode, audio mode, scale, tempo
@@ -67,7 +73,7 @@ Camera mode randomizes on scope rebuilds and idle resets, ensuring constant visu
 
 ```
 ObjectChamber.js (3D Scene)
-├── 50-100 physics-simulated objects
+├── 30-60 physics-simulated objects
 ├── PerspectiveCamera (FOV 60°, dynamic positioning)
 ├── Enhanced lighting (backlight + 4 accent lights)
 └── Renders to 2048x2048 WebGLRenderTarget
@@ -79,14 +85,17 @@ kaleidoscopeShader.js (GLSL)
 ├── Kaleidoscope mirroring (4-16 segments)
 ├── Non-linear radial compression
 ├── Spiral sampling pattern
-├── Glass front effects (distortion, aberration, vignette)
+├── Prismatic light dispersion (5-sample spectral spread)
+├── Audio-reactive ripple distortion
+├── Color wash overlay (mode-specific tint)
+├── Film grain (energy-reactive)
 └── Independent rotation animation
 
 ↓
 
 Post-Processing
-├── UnrealBloomPass (threshold 0.3, strength 0.6, radius 0.6)
-├── Audio-reactive bloom modulation (0.6-1.2x)
+├── UnrealBloomPass (threshold 0.3, audio-reactive strength)
+├── Feedback pass (frame blending for trail/afterimage effect)
 └── OutputPass to screen
 ```
 
@@ -100,27 +109,38 @@ Post-Processing
 
 ```javascript
 KaleidoscopeAudio.js
+├── Drum Sequencer (16-step patterns, 3 variations per mode)
+│   ├── Kick, Snare, HiHat patterns for house/algorave/dnb/lofi/exotic
+│   ├── Sidechain ducking on kick hits
+│   └── Snare fill transitions between mode switches
+│
 ├── Sequenced Instruments
-│   ├── Bass (MembraneSynth) - pattern-based, not random
+│   ├── Bass (MonoSynth) - pattern-based with mode-specific density
+│   ├── Sub-Bass (MembraneSynth 808) - alternates with bass in heavy modes
 │   ├── Chords (PolySynth) - probabilistic with scale locking
-│   ├── Melody (MonoSynth) - weighted note selection
-│   └── Arpeggio (PolySynth) - mode-dependent patterns
+│   ├── Lead/AggroLead (MonoSynth) - arpeggiator-driven
+│   ├── Pluck (MonoSynth) - melodic arpeggios in ambient/lofi/choral
+│   └── Choir (PolySynth) - sustained pads
+│
+├── Arpeggiator
+│   ├── 5 patterns: up, down, updown, skip, random
+│   └── Pattern assigned per beat mode
 │
 ├── Collision-Triggered Sounds
 │   ├── Glass chimes (velocity-sensitive)
-│   ├── Tight coupling to visual collisions
-│   └── Lowered threshold (0.003) for more responsiveness
+│   └── Tight coupling to visual collisions (threshold 0.003)
 │
 ├── Effects Chain
-│   ├── Reverb (adaptive decay 2-12s)
+│   ├── Reverb (adaptive decay 1.5-12s)
 │   ├── Delay (adaptive timing 16n-4n)
 │   ├── PitchShift (idle warp effect)
+│   ├── Vinyl crackle (brown noise bandpass, per-mode intensity)
+│   ├── Chorus
 │   └── Limiter (master output protection)
 │
 └── Analysis
-    ├── FFT (frequency domain)
     ├── Meter (time domain energy)
-    └── Normalized output (0-1) drives visual scaling
+    └── Normalized output (0-1) drives shader + bloom + feedback
 ```
 
 ### Idle Behavior System
@@ -142,29 +162,36 @@ This ensures the experience never becomes stale during ambient display.
 
 ### Visual
 - 4-16 adjustable mirror segments
-- 50-100 simulated 3D objects
-- Real-time physics with collision detection
+- 30-60 simulated 3D objects with real-time physics
 - Glass and metal materials with proper refractive properties
-- Balanced bloom without hot spots
+- Prismatic light dispersion with rainbow spectral bleeding
+- Audio-reactive ripple distortion and film grain
+- Feedback/trail post-processing (ghostly afterimages)
+- Mode-specific color wash tinting
+- Balanced bloom with audio-reactive intensity
 - 6 dynamic camera modes including "inside chamber" view
-- Glass front effects (distortion, aberration, vignetting)
-- Independent kaleidoscope pattern rotation
+- Glass front effects (barrel distortion, vignetting)
 
 ### Audio
-- 5 generative music modes (House, Exotic, Algorave, Choral, Tumbling)
-- Pattern-based sequencing for reliable bass presence
+- 8 generative music modes (House, Exotic Groove, Algorave, Choral, Tumbling, Ambient, DnB, Lo-fi)
+- 16-step pattern-based drum sequencer with 3 variations per mode
+- Arpeggiator with 5 movement patterns
+- Sub-bass 808 and pluck synth instruments
+- Sidechain ducking for pumping compression
+- Drum fill transitions between mode switches
+- Vinyl crackle effect (per-mode intensity)
 - Velocity-sensitive collision sounds
-- Eastern and western scale systems
+- Eastern and western scale systems (11 exotic scales)
 - Adaptive reverb and delay per mode
+- Smooth BPM transitions via rampTo
 - Pitch warp effect during idle periods
-- Tight audio-visual coupling
 
 ### Interaction
 - Mouse drag to rotate kaleidoscope view
 - Mouse wheel to zoom
 - Touch controls with pinch-to-zoom
 - Keyboard shortcuts (Space, A, F, C)
-- Theme selector (Gemstone, Enchanted, Monochrome, Celestial)
+- Theme selector (multiple themed object sets)
 - Camera mode selector
 - Build New Scope button for instant variation
 - Debug chamber view toggle
@@ -190,9 +217,13 @@ The kaleidoscope effect uses polar coordinate transformation with a twist:
 5. **Mirror**: `a = abs(a - segmentAngle/2)` creates symmetry
 6. **Non-linear compression**: `radialFactor = pow(r, 0.7)` compresses outer regions more than inner, eliminating empty background
 7. **Spiral sampling**: Adds rotating offset based on angle and time to ensure texture content is always sampled
-8. **Glass effects**: Barrel distortion, chromatic aberration (separate R/G/B samples), vignette, edge glow, ghosting
+8. **Audio-reactive ripple**: `uEnergy * 0.15 * sin(r * 10.0 - uTime * 5.0)` distorts the radial coordinate
+9. **Prismatic dispersion**: 5-sample spectral spread with yellow and cyan bleeding channels
+10. **Glass effects**: Barrel distortion, vignette, edge glow, ghosting
+11. **Color wash**: Mode-specific tint mixed at 15% opacity
+12. **Film grain**: Hash-based noise scaled by `0.03 + uEnergy * 0.05`
 
-This creates seamless, full-coverage kaleidoscope patterns with realistic optical effects.
+This creates seamless, full-coverage kaleidoscope patterns with realistic optical effects and audio-responsive behavior.
 
 ### The Camera System
 
@@ -223,15 +254,20 @@ Each mode uses parametric equations to define movement:
 
 - **Follow**: Lerp toward nearest object position with offset
 
-### Why Pattern-Based Bass Works
+### The Drum Sequencer
 
-Original implementation used `if (Math.random() > 0.8)` which gave only 20% density—bass was barely audible. The new system uses fixed rhythm patterns:
+Every rhythmic mode has a bank of 16-step patterns (3 variations each for kick, snare, hihat). On mode switch, a random pattern variant is selected:
 
 ```javascript
-const bassPattern = [1, 0, 1, 1, 0, 1, 1, 0]; // 60% density
+house: {
+    kick:  [[1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],   // four-on-the-floor
+             [1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,1,0],   // offbeat variation
+             [1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0]],  // syncopated
+    // ... snare and hihat patterns similarly
+}
 ```
 
-This guarantees predictable bass presence while maintaining variation through scale/root note randomization. The pattern cycles through, creating recognizable rhythm while the notes themselves vary infinitely.
+A shared `drumStep` counter advances on every 16th note, indexing into the active pattern. This replaces random probability triggers with real grooves while maintaining variety through pattern rotation and mode switching. Bass and sub-bass follow their own density patterns, with the 808 sub alternating in on 30% of hits in heavy modes.
 
 ## What Makes This Special
 
@@ -239,18 +275,20 @@ This guarantees predictable bass presence while maintaining variation through sc
 2. **Render-to-texture architecture**: The chamber is a real 3D scene, not a flat pattern
 3. **Mathematical accuracy**: Polar coordinate transformation mimics real kaleidoscope optics
 4. **Dynamic camera**: You're not locked to one viewpoint—the observer moves through the space
-5. **Generative audio**: Never the same twice, fully integrated with the visuals
-6. **Audio-visual coupling**: Every collision makes sound, every beat causes movement
-7. **Continuous evolution**: Idle behavior ensures ambient display never gets boring
-8. **Glass front simulation**: Optical effects (distortion, aberration, vignetting) mimic real kaleidoscope construction
-9. **Balanced aesthetics**: Bloom and glow without overwhelming—subtle sparkle, not blinding light
+5. **Generative audio**: Never the same twice, 8 distinct modes from lo-fi chill to 170 BPM DnB
+6. **Real drum patterns**: 16-step sequencer with sidechain ducking and fill transitions — not random probability
+7. **Audio-visual coupling**: Energy ripples through the shader, mode tints the color wash, beats pump the bloom
+8. **Prismatic optics**: 5-sample spectral dispersion creates rainbow light spreading at edges
+9. **Feedback trails**: Frame blending creates ghostly afterimages that vary with the music's intensity
+10. **Continuous evolution**: Idle behavior ensures ambient display never gets boring
+11. **Glass front simulation**: Barrel distortion, vignetting, and film grain mimic analog optics
 
 ## Future Possibilities
 
 ### Audio Enhancements
-- Audio-reactive camera (zoom pulses with kick, position shifts on crashes)
 - Collision camera shake (intensity based on impact velocity)
 - Spatial audio (panning based on object position in 3D space)
+- More beat modes (breakbeat, trip-hop, glitch)
 
 ### Visual Extensions
 - Depth of field with focus tracking

@@ -6,6 +6,8 @@ uniform float uAngle;
 uniform float uZoom;
 uniform float uTime;
 uniform float uKaleidoSpin;
+uniform float uEnergy;
+uniform vec3 uColorWash;
 
 varying vec2 vUv;
 
@@ -53,9 +55,12 @@ void main() {
     // Mirroring (Fold)
     a = abs(a - segmentAngle / 2.0);
 
+    // Audio-reactive ripple distortion
+    float ripple = uEnergy * 0.15 * sin(r * 10.0 - uTime * 5.0);
+    float distortedR = r + ripple;
+
     // Convert back to Cartesian with NON-LINEAR RADIAL COMPRESSION
-    // This fixes the empty background issue by compressing outer regions
-    float radialFactor = pow(r, 0.7); // Compress outer regions to fill space
+    float radialFactor = pow(distortedR, 0.7);
     vec2 newUv = vec2(cos(a), sin(a)) * radialFactor;
 
     // Zoom
@@ -86,12 +91,24 @@ void main() {
 
     vec4 color = texture2D(tDiffuse, sampleUv);
 
-    // Enhanced radial chromatic aberration for glass effect
+    // Prismatic light dispersion -- rainbow fan at edges
     vec2 aberrationDir = normalize(uv);
-    float aberration = 0.008 * r * r; // Quadratic falloff
-    color.r = texture2D(tDiffuse, applyBarrelDistortion(sampleUv + aberrationDir * aberration, 0.15)).r;
-    color.g = texture2D(tDiffuse, applyBarrelDistortion(sampleUv, 0.15)).g;
-    color.b = texture2D(tDiffuse, applyBarrelDistortion(sampleUv - aberrationDir * aberration, 0.15)).b;
+    float basePrism = 0.008 * r * r;
+    float energyBoost = 1.0 + uEnergy * 2.0; // 1x to 3x during loud passages
+    float prism = basePrism * energyBoost;
+
+    // 5-sample prismatic spread with spectral bleeding
+    float r_ch = texture2D(tDiffuse, applyBarrelDistortion(sampleUv + aberrationDir * prism * 1.5, 0.15)).r;
+    float g_ch = texture2D(tDiffuse, applyBarrelDistortion(sampleUv + aberrationDir * prism * 0.5, 0.15)).g;
+    float b_ch = texture2D(tDiffuse, applyBarrelDistortion(sampleUv - aberrationDir * prism * 1.0, 0.15)).b;
+
+    // Extra spectral color bleeding for rainbow effect
+    float yellow = texture2D(tDiffuse, applyBarrelDistortion(sampleUv + aberrationDir * prism * 1.0, 0.15)).r * 0.25;
+    float cyan   = texture2D(tDiffuse, applyBarrelDistortion(sampleUv - aberrationDir * prism * 0.3, 0.15)).g * 0.25;
+
+    color.r = r_ch + yellow;
+    color.g = g_ch + yellow + cyan;
+    color.b = b_ch + cyan;
 
     // Apply vignette for tube effect
     float vignette = calculateVignette(sampleUv, 0.3);
@@ -106,11 +123,43 @@ void main() {
     vec4 ghost = texture2D(tDiffuse, ghostUv) * 0.15;
     color = mix(color, color + ghost, r * 0.3);
 
+    // Color wash -- subtle tint overlay based on audio mode
+    color.rgb = mix(color.rgb, color.rgb + uColorWash, 0.15);
+
+    // Film grain -- analog texture
+    float grain = fract(sin(dot(vUv * uTime * 100.0, vec2(12.9898, 78.233))) * 43758.5453);
+    grain = (grain - 0.5) * 2.0;
+    float grainAmount = 0.03 + uEnergy * 0.05;
+    color.rgb += grain * grainAmount;
+
     gl_FragColor = color;
 }
 `;
 
 export const kaleidoscopeVertexShader = `
+varying vec2 vUv;
+
+void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+// Feedback blend shader for trail/afterimage effect
+export const feedbackFragmentShader = `
+uniform sampler2D tDiffuse;
+uniform sampler2D tPreviousFrame;
+uniform float uFeedback;
+varying vec2 vUv;
+
+void main() {
+    vec4 current = texture2D(tDiffuse, vUv);
+    vec4 previous = texture2D(tPreviousFrame, vUv);
+    gl_FragColor = mix(current, previous, uFeedback);
+}
+`;
+
+export const feedbackVertexShader = `
 varying vec2 vUv;
 
 void main() {
