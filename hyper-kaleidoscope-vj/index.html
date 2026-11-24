@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080612">
+  <meta name="description" content="An interactive WebGL kaleidoscope tunnel for live audiovisual play. Tune symmetry, fold, prism, and three bands of audio response.">
+  <title>Hyper-Kaleidoscope — Live VJ Instrument</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <canvas id="vj-canvas" aria-hidden="true"></canvas>
+  <div class="noise" aria-hidden="true"></div>
+  <div id="error" class="error" role="alert" hidden></div>
+  <header class="topbar">
+    <div class="identity"><span class="symbol" aria-hidden="true">✳</span><div><strong>HYPER / KALEIDOSCOPE</strong><small>LIVE VJ INSTRUMENT <span class="separator">·</span> WEBGL STUDY 01</small></div></div>
+    <div class="top-actions"><a href="https://melodyfire.space/#/kaleidoscope" target="_blank" rel="noopener noreferrer" class="portfolio-link">MELODYFIRE ↗</a><button id="hud-toggle" class="pill" aria-controls="hud-panel" aria-expanded="false">CONTROLS <span aria-hidden="true">⌘</span></button></div>
+  </header>
+  <div class="stage-caption" aria-hidden="true"><span>01 / FRACTAL TUNNEL</span><span class="caption-line"></span><span>REALTIME GENERATIVE STUDY</span></div>
+  <div class="stage-instructions">Drag to steer <span>·</span> Space to drop <span>·</span> Tap controls to shape the field</div>
+  <div class="bottom-bar"><div class="live-label"><span class="live-dot"></span><span>LIVE RENDER</span><span id="quality-label" class="muted">ADAPTIVE RESOLUTION</span></div><button id="btn-drop" class="drop-button" type="button">TRIGGER DROP <span aria-hidden="true">↗</span></button></div>
+  <aside id="hud-panel" class="panel" aria-label="Visual instrument controls" inert>
+    <div class="panel-head"><div><span class="eyebrow">PLAY / PARAMETERS</span><h1>Shape the signal<span class="period">.</span></h1><p>A small, playable audiovisual study.</p></div><button id="hud-close" class="close-button" type="button" aria-label="Close controls">×</button></div>
+    <div class="panel-scroll">
+      <section class="control-section" aria-labelledby="audio-title"><div class="section-heading"><h2 id="audio-title">01 <span>Audio input</span></h2><span id="audio-status" class="status" role="status" aria-live="polite">VISUAL IDLE</span></div><div class="source-grid"><button id="src-synth" type="button" class="source-btn">BEAT SYNTH</button><button id="src-mic" type="button" class="source-btn">MIC IN</button><button id="src-tab" type="button" class="source-btn">TAB AUDIO</button></div><button id="src-stop" type="button" class="stop-btn">STOP AUDIO</button><p class="hint">Input requires a tap and browser permission. Tab audio depends on your browser and shared tab. The mic is never played back.</p><div class="meters" aria-label="Audio energy"><div class="meter"><span>BASS</span><div><i id="meter-bass"></i></div></div><div class="meter"><span>MIDS</span><div><i id="meter-mid"></i></div></div><div class="meter"><span>HIGH</span><div><i id="meter-high"></i></div></div></div><label class="slider-label" for="ctrl-gain">REACTIVITY GAIN <output id="val-gain" for="ctrl-gain">1.6×</output></label><input id="ctrl-gain" type="range" min="0.2" max="3.5" step="0.1" value="1.6"></section>
+      <section class="control-section" aria-labelledby="geometry-title"><div class="section-heading"><h2 id="geometry-title">02 <span>Geometry</span></h2></div><label class="slider-label" for="ctrl-slices">KALEIDOSCOPE SLICES <output id="val-slices" for="ctrl-slices">12</output></label><input id="ctrl-slices" type="range" min="4" max="24" step="2" value="12"><label class="slider-label" for="ctrl-speed">TUNNEL SPEED <output id="val-speed" for="ctrl-speed">1.00</output></label><input id="ctrl-speed" type="range" min="0" max="3" step="0.05" value="1"><label class="slider-label" for="ctrl-morph">FRACTAL FOLD <output id="val-morph" for="ctrl-morph">1.25</output></label><input id="ctrl-morph" type="range" min="0.4" max="2.5" step="0.05" value="1.25"><label class="slider-label" for="ctrl-chroma">PRISM SPLIT <output id="val-chroma" for="ctrl-chroma">1.10</output></label><input id="ctrl-chroma" type="range" min="0" max="2.5" step="0.05" value="1.1"></section>
+      <section class="control-section" aria-labelledby="palette-title"><div class="section-heading"><h2 id="palette-title">03 <span>Spectrum</span></h2></div><div class="palette-grid" role="group" aria-label="Color spectrum"><button type="button" class="palette-btn active" data-palette="0" aria-pressed="true"><span class="swatch acid"></span>HYPER ACID</button><button type="button" class="palette-btn" data-palette="1" aria-pressed="false"><span class="swatch ultraviolet"></span>ULTRAVIOLET</button><button type="button" class="palette-btn" data-palette="2" aria-pressed="false"><span class="swatch solar"></span>SOLAR FLARE</button><button type="button" class="palette-btn" data-palette="3" aria-pressed="false"><span class="swatch cyber"></span>CYBER MATRIX</button></div></section>
+      <footer class="panel-foot"><strong>JENNIPHER LAURA TROUP</strong><span>INTERACTION · SHADER · MOTION</span><a href="https://github.com/qt314wink/Kaleidoscope/tree/master/hyper-kaleidoscope-vj" target="_blank" rel="noopener noreferrer">VIEW SOURCE ↗</a></footer>
+    </div>
+  </aside>
+</body>
+</html>
