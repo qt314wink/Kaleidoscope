@@ -50,14 +50,17 @@ vec3 renderScene(vec2 uv){
   float t=.04,glow=0.0;vec3 color=vec3(.007,.005,.024);
   for(int i=0;i<40;i++){
     vec3 p=ro+rd*t;float d=mapScene(p);
-    glow+=exp(-abs(d)*(8.0-u_high*2.0))*(.035+u_high*.025);
+    glow+=exp(-abs(d)*(8.0-u_high*2.0))*(.012+u_high*.012);
     if(d<.004){float v=p.z*.16+length(p.xy)*.4-u_time*.14+u_mid*.2;
-      color=palette(v,u_palette)*(1.0-float(i)/55.0)*(1.0+u_bass*.38+u_kick*.38);break;}
+      float facet=pow(abs(sin(p.z*5.0+atan(p.y,p.x)*u_slices*1.2)),5.0);
+      float rays=pow(abs(sin(atan(p.y,p.x)*u_slices*2.0+p.z*1.3)),10.0);
+      float lighting=.12+.62*facet+.34*rays;
+      color=palette(v,u_palette)*lighting*(1.0-float(i)/60.0)*(1.0+u_bass*.38+u_kick*.38);break;}
     t+=max(d*.72,.018);if(t>19.0)break;
   }
-  float r=length(uv);color+=palette(r*.6-u_travel*.08+u_bass*.2,u_palette)*glow*(.72+u_high*.42);
+  float r=length(uv);color+=palette(r*.6-u_travel*.08+u_bass*.2,u_palette)*min(glow,.75)*(.35+u_high*.2);
   float edge=.2+.04*cos(atan(uv.y,uv.x)*u_slices*.5+u_time*2.0)+u_bass*.06+u_kick*.04;
-  color=mix(color,vec3(.14,.07,.72)*(1.0+u_kick*.25),smoothstep(edge+.12,edge-.02,r)*.7);
+  color=mix(color,vec3(.08,.04,.36)*(1.0+u_kick*.25),smoothstep(edge+.12,edge-.02,r)*.65);
   return color;
 }
 void main(){
