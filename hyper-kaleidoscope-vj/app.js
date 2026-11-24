@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const canvas = document.querySelector('#vj-canvas');
+  let canvas = document.querySelector('#vj-canvas');
   const errorBox = document.querySelector('#error');
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const lowPower = matchMedia('(max-width: 680px)').matches;
@@ -77,8 +77,8 @@ void main(){
   color*=max(.42,1.0-.19*dot(uv,uv));
   gl_FragColor=vec4(clamp(color,0.0,1.0),1.0);
 }`;
-  let gl, program, locations, buffer, resolutionScale = lowPower ? .78 : 1;
-  let raf = 0, lastTime = performance.now(), elapsed = 0, slowFrames = 0, activeMode = 'none';
+  let gl, program, locations, buffer, fallbackCtx = null, resolutionScale = lowPower ? .78 : 1;
+  let raf = 0, lastTime = performance.now(), lastFallbackFrame = 0, elapsed = 0, slowFrames = 0, activeMode = 'none';
   function showError(message) { errorBox.textContent = message; errorBox.hidden = false; }
   function compile(type, source) {
     const shader = gl.createShader(type);
@@ -103,16 +103,15 @@ void main(){
     resize(); errorBox.hidden = true;
   }
   function resize() {
-    if (!gl) return;
+    if (!gl && !fallbackCtx) return;
     const dpr = Math.min(devicePixelRatio || 1, lowPower ? 1.3 : 1.5) * resolutionScale;
     const pixelBudget = lowPower ? 800000 : 1800000;
     const budgetScale = Math.min(1, Math.sqrt(pixelBudget / (innerWidth * innerHeight * dpr * dpr)));
     const w = Math.max(1,Math.round(innerWidth*dpr*budgetScale)), h = Math.max(1,Math.round(innerHeight*dpr*budgetScale));
-    if (canvas.width !== w || canvas.height !== h) { canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h); }
+    if (canvas.width !== w || canvas.height !== h) { canvas.width=w;canvas.height=h;if (gl && !fallbackCtx) gl.viewport(0,0,w,h); }
   }
   addEventListener('resize', resize);
-  canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); cancelAnimationFrame(raf); showError('Graphics context paused. Waiting for the browser to restore it.'); });
-  canvas.addEventListener('webglcontextrestored', () => { try { initGL(); lastTime=performance.now(); raf=requestAnimationFrame(render); } catch (error) { showError('Graphics could not restart: '+error.message); } });
+  canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); cancelAnimationFrame(raf); startFallback(); lastTime=performance.now(); raf=requestAnimationFrame(render); });
   const panel = document.querySelector('#hud-panel'), toggle = document.querySelector('#hud-toggle');
   function setPanel(open) { panel.classList.toggle('open',open); panel.inert=!open; toggle.setAttribute('aria-expanded',String(open)); if (open) document.querySelector('#hud-close').focus(); else toggle.focus(); }
   toggle.addEventListener('click', () => setPanel(!panel.classList.contains('open')));
@@ -129,13 +128,65 @@ void main(){
   }));
   function triggerDrop() { state.kick=1.0;state.bass=Math.max(state.bass,.78);state.high=Math.max(state.high,.55); }
   document.querySelector('#btn-drop').addEventListener('click',triggerDrop);
-  canvas.addEventListener('dblclick',triggerDrop);
   let dragging=false;
-  canvas.addEventListener('pointerdown',event=>{dragging=true;canvas.setPointerCapture(event.pointerId);steer(event);});
-  canvas.addEventListener('pointermove',event=>{if(dragging || event.pointerType==='mouse')steer(event);});
-  canvas.addEventListener('pointerup',()=>{dragging=false;});
-  canvas.addEventListener('pointercancel',()=>{dragging=false;});
+  function bindCanvas(target) {
+    target.addEventListener('dblclick',triggerDrop);
+    target.addEventListener('pointerdown',event=>{dragging=true;target.setPointerCapture(event.pointerId);steer(event);});
+    target.addEventListener('pointermove',event=>{if(dragging || event.pointerType==='mouse')steer(event);});
+    target.addEventListener('pointerup',()=>{dragging=false;});
+    target.addEventListener('pointercancel',()=>{dragging=false;});
+  }
+  bindCanvas(canvas);
   function steer(event){state.tx=event.clientX/innerWidth*2-1;state.ty=1-event.clientY/innerHeight*2;}
+  const fallbackPalettes = [
+    ['#4434ff','#ed44bf','#41edaa','#f7de5a'],
+    ['#3e38b9','#9a50ec','#e596ef','#7b6bff'],
+    ['#ed533d','#ff9a37','#ffe18c','#e44b91'],
+    ['#147c9c','#21e0b2','#8aff9a','#3849b8']
+  ];
+  function startFallback() {
+    if (gl) {
+      const replacement=document.createElement('canvas');replacement.id='vj-canvas';replacement.setAttribute('aria-hidden','true');
+      canvas.replaceWith(replacement);canvas=replacement;bindCanvas(canvas);gl=null;
+    }
+    fallbackCtx=canvas.getContext('2d',{alpha:false});
+    if (!fallbackCtx) { showError('This browser cannot create a graphics canvas. Open the demo in a current browser.');return; }
+    document.querySelector('#render-mode').textContent='CANVAS MODE';
+    document.querySelector('#quality-label').textContent='WEBGL UNAVAILABLE';
+    errorBox.hidden=true;resize();
+  }
+  function drawFallback() {
+    const c=fallbackCtx,w=canvas.width,h=canvas.height,cx=w*.5+state.x*w*.07,cy=h*.5-state.y*h*.07;
+    const maxRadius=Math.hypot(w,h)*.67, colors=fallbackPalettes[state.palette];
+    c.setTransform(1,0,0,1,0,0);c.fillStyle='#090616';c.fillRect(0,0,w,h);
+    const haze=c.createRadialGradient(cx,cy,5,cx,cy,maxRadius);
+    haze.addColorStop(0,'#16113e');haze.addColorStop(.42,'#181039');haze.addColorStop(1,'#06030d');
+    c.fillStyle=haze;c.fillRect(0,0,w,h);c.save();c.translate(cx,cy);
+    const slices=Math.round(state.slices),turn=reducedMotion.matches?0:elapsed*.08;
+    for(let ring=7;ring>=0;ring--){
+      const radius=24+((ring*maxRadius/7+state.travel*38)%maxRadius);
+      const size=Math.max(13,radius*.34*state.morph),opacity=Math.min(.86,.18+radius/maxRadius*.55);
+      c.globalAlpha=opacity;c.shadowBlur=12+state.chroma*4;c.shadowColor=colors[(ring+1)%4];
+      const fill=c.createLinearGradient(0,radius-size,0,radius+size);
+      fill.addColorStop(0,colors[ring%4]);fill.addColorStop(.5,colors[(ring+1)%4]);fill.addColorStop(1,colors[(ring+2)%4]);
+      c.fillStyle=fill;c.strokeStyle=colors[(ring+3)%4];c.lineWidth=Math.max(1,w/700);
+      for(let i=0;i<slices;i++){
+        const a=turn*(ring%2?-1:1)+i*Math.PI*2/slices;
+        c.save();c.rotate(a);
+        const spread=Math.min(radius*.27,Math.PI*radius/slices*.8)*(1+state.mid*.25);
+        c.beginPath();c.moveTo(0,radius-size);
+        c.quadraticCurveTo(spread*1.55,radius-size*.3,spread,radius);
+        c.quadraticCurveTo(spread*.75,radius+size*.7,0,radius+size);
+        c.quadraticCurveTo(-spread*.75,radius+size*.7,-spread,radius);
+        c.quadraticCurveTo(-spread*1.55,radius-size*.3,0,radius-size);
+        c.fill();c.stroke();c.restore();
+      }
+    }
+    c.shadowBlur=0;c.globalAlpha=1;
+    const core=c.createRadialGradient(0,0,1,0,0,Math.min(w,h)*.13*(1+state.kick*.16));
+    core.addColorStop(0,'#06051b');core.addColorStop(.75,'#171043');core.addColorStop(1,'#5e2bab');
+    c.fillStyle=core;c.beginPath();c.arc(0,0,Math.min(w,h)*.13*(1+state.kick*.16),0,Math.PI*2);c.fill();c.restore();
+  }
   let audioCtx=null, analyser=null, freqData=null, activeStream=null, sourceNode=null, synthTimer=null, synthNodes=[], nextStep=0, step=0, sourceGeneration=0;
   const status=document.querySelector('#audio-status');
   function setStatus(label,mode='none') { status.textContent=label;activeMode=mode;document.querySelectorAll('.source-btn').forEach(b=>b.classList.toggle('active',b.id==='src-'+mode)); }
@@ -219,10 +270,12 @@ void main(){
     if(dt>.036){slowFrames++;if(slowFrames>90 && resolutionScale>.55){resolutionScale=Math.max(.55,resolutionScale-.15);resize();slowFrames=0;document.querySelector('#quality-label').textContent='PERFORMANCE MODE';}}else slowFrames=Math.max(0,slowFrames-1);
     if(!reducedMotion.matches){elapsed+=dt;state.travel+=dt*state.speed*(.65+state.bass+state.kick*1.1)*1.4;}
     analyze(dt);state.x+=(state.tx-state.x)*Math.min(1,dt*8);state.y+=(state.ty-state.y)*Math.min(1,dt*8);
+    if(fallbackCtx){if(now-lastFallbackFrame>(reducedMotion.matches?100:32)){drawFallback();lastFallbackFrame=now;}return;}
     gl.useProgram(program);gl.uniform2f(locations.res,canvas.width,canvas.height);
     for(const key of ['time','travel','slices','morph','chroma','palette','bass','mid','high','kick'])gl.uniform1f(locations[key],key==='time'?elapsed:state[key]);
     gl.uniform2f(locations.mouse,state.x,state.y);gl.uniform1f(locations.quality,lowPower?0:1);
     gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   }
-  try{initGL();raf=requestAnimationFrame(render);}catch(error){showError('The visual engine could not start: '+error.message);console.error(error);}
+  try{initGL();}catch(error){console.warn('WebGL unavailable; using Canvas mode:',error);startFallback();}
+  if(gl || fallbackCtx)raf=requestAnimationFrame(render);
 })();
